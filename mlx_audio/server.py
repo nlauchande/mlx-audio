@@ -2,15 +2,15 @@ import argparse
 import importlib.util
 import logging
 import os
+import subprocess
 import sys
 import tempfile
 import uuid
 
 import numpy as np
-import requests
 import soundfile as sf
 import uvicorn
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -227,8 +227,14 @@ def get_audio_file(filename: str):
     Return an audio file from the outputs folder.
     The user can GET /audio/<filename> to fetch the WAV file.
     """
-    file_path = os.path.join(OUTPUT_FOLDER, filename)
+    # Resolve the absolute path and ensure it is within the output directory
+    file_path = os.path.abspath(os.path.join(OUTPUT_FOLDER, filename))
+    output_root = os.path.abspath(OUTPUT_FOLDER) + os.sep
     logger.debug(f"Requested audio file: {file_path}")
+
+    if not file_path.startswith(output_root):
+        logger.warning("Attempted path traversal detected")
+        return JSONResponse({"error": "Invalid file path"}, status_code=400)
 
     if not os.path.exists(file_path):
         logger.error(f"File not found: {file_path}")
@@ -391,26 +397,29 @@ def stop_audio():
 
 
 @app.post("/open_output_folder")
-def open_output_folder():
+def open_output_folder(request: Request):
     """
     Open the output folder in the system file explorer (Finder on macOS).
     This only works when running on localhost for security reasons.
     """
     global OUTPUT_FOLDER
 
-    # Check if the request is coming from localhost
-    # Note: In a production environment, you would want to check the request IP
+    # Only allow requests from localhost for security reasons
+    client_host = request.client.host if request.client else None
+    if client_host not in {"127.0.0.1", "::1"}:
+        logger.warning(f"Denied open_output_folder from {client_host}")
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
 
     try:
         # For macOS (Finder)
         if sys.platform == "darwin":
-            os.system(f"open {OUTPUT_FOLDER}")
+            subprocess.run(["open", OUTPUT_FOLDER], check=True)
         # For Windows (Explorer)
         elif sys.platform == "win32":
-            os.system(f"explorer {OUTPUT_FOLDER}")
+            subprocess.run(["explorer", OUTPUT_FOLDER], check=True)
         # For Linux (various file managers)
         elif sys.platform == "linux":
-            os.system(f"xdg-open {OUTPUT_FOLDER}")
+            subprocess.run(["xdg-open", OUTPUT_FOLDER], check=True)
         else:
             return JSONResponse(
                 {"error": f"Unsupported platform: {sys.platform}"}, status_code=500

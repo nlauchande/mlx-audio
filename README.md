@@ -128,7 +128,12 @@ The server provides the following REST API endpoints:
 
 - `POST /open_output_folder`: Open the output folder in the system's file explorer
   - Returns: JSON with status and path
-  - Note: This feature only works when running the server locally
+  - Note: This feature only works when running the server locally and requests
+    from other hosts are rejected
+
+Security notes:
+- The `/audio/{filename}` endpoint now validates paths to prevent traversal
+  attacks.
 
 > Note: Generated audio files are stored in `~/.mlx_audio/outputs` by default, or in a fallback directory if that location is not writable.
 
