@@ -227,8 +227,13 @@ def get_audio_file(filename: str):
     Return an audio file from the outputs folder.
     The user can GET /audio/<filename> to fetch the WAV file.
     """
-    file_path = os.path.join(OUTPUT_FOLDER, filename)
+    file_path = os.path.abspath(os.path.join(OUTPUT_FOLDER, filename))
     logger.debug(f"Requested audio file: {file_path}")
+
+    # Prevent path traversal outside the OUTPUT_FOLDER
+    if not file_path.startswith(os.path.abspath(OUTPUT_FOLDER)):
+        logger.warning(f"Attempted path traversal: {file_path}")
+        return JSONResponse({"error": "Invalid file path"}, status_code=400)
 
     if not os.path.exists(file_path):
         logger.error(f"File not found: {file_path}")
@@ -349,7 +354,13 @@ def play_audio(filename: str = Form(...)):
     if audio_player is None:
         return JSONResponse({"error": "Audio player not initialized"}, status_code=500)
 
-    file_path = os.path.join(OUTPUT_FOLDER, filename)
+    file_path = os.path.abspath(os.path.join(OUTPUT_FOLDER, filename))
+
+    # Prevent path traversal outside the OUTPUT_FOLDER
+    if not file_path.startswith(os.path.abspath(OUTPUT_FOLDER)):
+        logger.warning(f"Attempted path traversal: {file_path}")
+        return JSONResponse({"error": "Invalid file path"}, status_code=400)
+
     if not os.path.exists(file_path):
         return JSONResponse({"error": "File not found"}, status_code=404)
 
